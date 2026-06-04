@@ -309,6 +309,9 @@ class AIJourneyGameOnline {
     loadAct(act, level) {
         this.currentAct = act;
         
+        // 重置对话状态，防止旧状态干扰
+        this.isShowingDialogue = false;
+        
         // 构建对话队列
         this.dialogueQueue = [];
         
@@ -339,13 +342,18 @@ class AIJourneyGameOnline {
         const choicesPanel = document.getElementById('choices-panel');
         if (choicesPanel) choicesPanel.style.display = 'none';
 
-        // 开始显示对话
-        this.isShowingDialogue = false;
-        this.advanceDialogue();
+        // 延迟开始显示对话，确保UI已更新
+        setTimeout(() => {
+            this.isShowingDialogue = false;
+            this.advanceDialogue();
+        }, 100);
     }
 
     // 兼容旧数据结构
     loadLegacyLevel(level) {
+        // 重置对话状态
+        this.isShowingDialogue = false;
+        
         this.dialogueQueue = [
             { speaker: '系统', text: `欢迎来到${level.year}年的${level.location}。`, icon: '🌐' },
             { speaker: '系统', text: level.description, icon: '🌐' },
@@ -355,8 +363,11 @@ class AIJourneyGameOnline {
         const choicesPanel = document.getElementById('choices-panel');
         if (choicesPanel) choicesPanel.style.display = 'none';
 
-        this.isShowingDialogue = false;
-        this.advanceDialogue();
+        // 延迟开始显示对话
+        setTimeout(() => {
+            this.isShowingDialogue = false;
+            this.advanceDialogue();
+        }, 100);
     }
 
     // 获取角色问候语
@@ -466,20 +477,37 @@ class AIJourneyGameOnline {
         }
         
         if (choices.length === 0) {
-            // 如果没有选择，直接进入下一关
-            this.dialogueQueue.push({
-                speaker: '系统',
-                text: '本幕结束。',
-                icon: '🌐'
-            });
-            this.advanceDialogue();
-            setTimeout(() => {
-                this.showLevelComplete({
-                    wisdomBonus: 0,
-                    totalWisdom: this.player.wisdom,
-                    newKnowledge: level.knowledgePoints || []
+            // 如果没有选择，检查是否还有下一幕
+            const hasMoreActs = level.acts && this.currentActIndex < level.acts.length - 1;
+            
+            if (hasMoreActs) {
+                // 还有下一幕，自动进入
+                this.dialogueQueue.push({
+                    speaker: '系统',
+                    text: '剧情继续...',
+                    icon: '🌐'
                 });
-            }, 1500);
+                this.advanceDialogue();
+                setTimeout(() => {
+                    this.currentActIndex++;
+                    this.loadAct(level.acts[this.currentActIndex], level);
+                }, 1500);
+            } else {
+                // 所有幕都完成了，进入关卡完成
+                this.dialogueQueue.push({
+                    speaker: '系统',
+                    text: '本关结束。',
+                    icon: '🌐'
+                });
+                this.advanceDialogue();
+                setTimeout(() => {
+                    this.showLevelComplete({
+                        wisdomBonus: 0,
+                        totalWisdom: this.player.wisdom,
+                        newKnowledge: level.knowledgePoints || []
+                    });
+                }, 1500);
+            }
             return;
         }
         
