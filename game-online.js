@@ -213,6 +213,12 @@ class AIJourneyGameOnline {
         if (!track) return;
         track.innerHTML = '';
         
+        // 确保 GameData 已加载
+        if (typeof GameData === 'undefined' || !GameData.levels) {
+            console.warn('GameData 未加载，时间线无法渲染');
+            return;
+        }
+        
         const levels = this.levels || GameData.levels;
         levels.forEach((level, index) => {
             const node = document.createElement('div');
@@ -391,7 +397,42 @@ class AIJourneyGameOnline {
         if (!list) return;
         list.innerHTML = '';
 
-        const characters = GameData.characters.filter(c => c.era === level.eraId);
+        // 新的数据结构：从关卡数据中提取角色信息
+        const characters = [];
+        
+        // 添加主要角色（当前关卡的核心人物）
+        if (level.character) {
+            characters.push({
+                id: 'main',
+                name: level.character,
+                icon: level.characterIcon || '👤',
+                role: 'partner',
+                era: level.eraId
+            });
+        }
+        
+        // 从当前幕的场景中提取其他角色
+        if (this.currentAct && this.currentAct.scenes) {
+            const seenSpeakers = new Set([level.character, '系统']);
+            this.currentAct.scenes.forEach(scene => {
+                if (scene.speaker && !seenSpeakers.has(scene.speaker)) {
+                    seenSpeakers.add(scene.speaker);
+                    characters.push({
+                        id: 'speaker_' + scene.speaker,
+                        name: scene.speaker,
+                        icon: scene.icon || '👤',
+                        role: 'partner',
+                        era: level.eraId
+                    });
+                }
+            });
+        }
+        
+        // 兼容旧数据结构
+        if (characters.length === 0 && GameData.characters && Array.isArray(GameData.characters)) {
+            const oldChars = GameData.characters.filter(c => c.era === level.eraId);
+            characters.push(...oldChars);
+        }
         
         characters.forEach(char => {
             const item = document.createElement('div');
@@ -418,7 +459,16 @@ class AIJourneyGameOnline {
         if (this.isShowingDialogue) return;
 
         if (this.dialogueQueue.length === 0) {
-            this.showChoices();
+            // 如果选择后对话已结束，处理后续剧情推进
+            if (this._afterChoice) {
+                if (this._onlineChoiceResult) {
+                    this.handleOnlineChoiceAfterDialogue();
+                } else {
+                    this.handleChoiceAfterDialogue();
+                }
+            } else {
+                this.showChoices();
+            }
             return;
         }
 
@@ -616,12 +666,11 @@ class AIJourneyGameOnline {
                     });
                 }
 
-                this.advanceDialogue();
+                // 标记为选择后状态，等待对话结束后再推进
+                this._afterChoice = true;
+                this._onlineChoiceResult = result;
 
-                // 延迟后显示关卡完成
-                setTimeout(() => {
-                    this.showLevelComplete(result);
-                }, 2000);
+                this.advanceDialogue();
 
             } catch (error) {
                 console.error('提交选择失败:', error);
@@ -630,6 +679,20 @@ class AIJourneyGameOnline {
         } else {
             this.makeChoiceOffline(choiceIndex);
         }
+    }
+    
+    // 处理在线模式选择后的剧情推进
+    handleOnlineChoiceAfterDialogue() {
+        if (!this._onlineChoiceResult) return;
+        
+        const result = this._onlineChoiceResult;
+        this._onlineChoiceResult = null;
+        this._afterChoice = false;
+        
+        // 延迟后显示关卡完成或进入下一关
+        setTimeout(() => {
+            this.showLevelComplete(result);
+        }, 500);
     }
 
     // 离线模式做出选择
@@ -673,53 +736,83 @@ class AIJourneyGameOnline {
         const consequences = choice.consequences || {};
         const consequenceDesc = consequences.description || this.getDefaultResult(choice.type);
         
+        // 判断是进入下一幕还是完成关卡
+        const nextActId = consequences.nextAct;
+        const hasNextAct = nextActId && level.acts && level.acts.find(a => a.id === nextActId);
+        
+        // 构建结果对话队列
         this.dialogueQueue = [
             { speaker: '系统', text: consequenceDesc, icon: '🌐' },
             { speaker: '系统', text: `智慧值 +${wisdomBonus}！`, icon: '⭐' }
         ];
+        
+        // 如果有下一幕，添加过渡提示
+        if (hasNextAct) {
+            this.dialogueQueue.push(
+                { speaker: '系统', text: '剧情继续发展...', icon: '➡️' }
+            );
+        } else {
+            // 如果没有下一幕，添加关卡完成提示
+            this.dialogueQueue.push(
+                { speaker: '系统', text: '本关剧情结束，准备进入下一关...', icon: '🏁' }
+            );
+        }
 
         // 更新全局状态
         if (consequences.stateChanges) {
             Object.assign(this.globalState, consequences.stateChanges);
         }
 
-        this.advanceDialogue();
+        // 标记为选择后状态，防止 advanceDialogue 调用 showChoices
+        this._afterChoice = true;
+        this._choiceNextAct = hasNextAct ? nextActId : null;
+        this._choiceLevel = level;
+        this._choiceWisdomBonus = wisdomBonus;
 
-        // 判断是进入下一幕还是完成关卡
-        const nextActId = consequences.nextAct;
+        this.advanceDialogue();
+    }
+    
+    // 处理选择后的剧情推进（在对话队列清空后调用）
+    handleChoiceAfterDialogue() {
+        if (!this._afterChoice) return;
+        
+        const nextActId = this._choiceNextAct;
+        const level = this._choiceLevel;
+        const wisdomBonus = this._choiceWisdomBonus;
+        
+        // 清除标记
+        this._afterChoice = false;
+        this._choiceNextAct = null;
+        this._choiceLevel = null;
+        this._choiceWisdomBonus = 0;
         
         if (nextActId && level.acts) {
-            // 查找下一幕
+            // 查找并进入下一幕
             const nextAct = level.acts.find(a => a.id === nextActId);
             if (nextAct) {
-                // 延迟后进入下一幕
-                setTimeout(() => {
-                    this.currentActIndex = level.acts.indexOf(nextAct);
-                    this.loadAct(nextAct, level);
-                }, 2500);
+                this.currentActIndex = level.acts.indexOf(nextAct);
+                this.loadAct(nextAct, level);
                 return;
             }
         }
         
         // 没有下一幕，完成关卡
-        setTimeout(() => {
-            // 收集知识点
-            let newKnowledge = [];
-            if (level.knowledgePoints) {
-                level.knowledgePoints.forEach(kp => {
-                    if (!this.player.knowledgeCollected.find(k => k.title === kp.title)) {
-                        this.player.knowledgeCollected.push(kp);
-                        newKnowledge.push(kp);
-                    }
-                });
-            }
-            
-            this.showLevelComplete({
-                wisdomBonus: wisdomBonus,
-                totalWisdom: this.player.wisdom,
-                newKnowledge: newKnowledge
+        // 收集知识点
+        let newKnowledge = [];
+        if (level.knowledgePoints) {
+            level.knowledgePoints.forEach(kp => {
+                if (!this.player.knowledgeCollected.find(k => k.title === kp.title)) {
+                    this.player.knowledgeCollected.push(kp);
+                    newKnowledge.push(kp);
+                }
             });
-        }, 2500);
+        }
+        
+        this.showLevelComplete({
+            wisdomBonus: wisdomBonus,
+            totalWisdom: this.player.wisdom,
+            newKnowledge: newKnowledge
+        });
     }
 
     // 获取默认结果
@@ -882,6 +975,11 @@ class AIJourneyGameOnline {
         this.isShowingDialogue = false;
         this.isOnline = false;
         this.globalState = {};
+        this._afterChoice = false;
+        this._choiceNextAct = null;
+        this._choiceLevel = null;
+        this._choiceWisdomBonus = 0;
+        this._onlineChoiceResult = null;
 
         // 重置UI
         document.getElementById('player-name').value = '';
@@ -894,7 +992,26 @@ class AIJourneyGameOnline {
 
     // 打开聊天
     openChat(characterId) {
-        const character = GameData.characters.find(c => c.id === characterId);
+        let character = null;
+        
+        // 尝试从旧数据结构查找
+        if (Array.isArray(GameData.characters)) {
+            character = GameData.characters.find(c => c.id === characterId);
+        }
+        
+        // 如果找不到，从当前关卡数据构建角色信息
+        if (!character) {
+            const level = GameData.levels[this.currentLevel];
+            if (level && level.character) {
+                character = {
+                    id: 'main',
+                    name: level.character,
+                    icon: level.characterIcon || '👤',
+                    personality: `我是${level.characterRole || level.character}`
+                };
+            }
+        }
+        
         if (!character) return;
 
         document.getElementById('chat-character-name').textContent = `与${character.name}对话`;
@@ -904,7 +1021,10 @@ class AIJourneyGameOnline {
         this.currentChatCharacter = characterId;
         
         // 添加欢迎消息
-        this.addChatMessage('ai', `你好，我是${character.name}。${character.personality}。你想聊些什么？`);
+        const welcomeMsg = character.personality 
+            ? `你好，我是${character.name}。${character.personality}。你想聊些什么？`
+            : `你好，我是${character.name}。你想聊些什么？`;
+        this.addChatMessage('ai', welcomeMsg);
         
         document.getElementById('ai-chat-modal').classList.add('active');
     }
@@ -951,10 +1071,28 @@ class AIJourneyGameOnline {
 
     // 直接调用AI（离线模式回退）
     async callAIDirectly(message, characterId) {
-        const character = GameData.characters.find(c => c.id === characterId);
+        let character = null;
+        
+        // 尝试从旧数据结构查找
+        if (Array.isArray(GameData.characters)) {
+            character = GameData.characters.find(c => c.id === characterId);
+        }
+        
+        // 如果找不到，从当前关卡数据构建
+        if (!character) {
+            const level = GameData.levels[this.currentLevel];
+            if (level && level.character) {
+                character = {
+                    id: 'main',
+                    name: level.character,
+                    prompt: `你是${level.character}，${level.characterRole || '历史人物'}。你在${level.year}年的${level.location}。`
+                };
+            }
+        }
+        
         if (!character) return '角色不存在';
 
-        const systemPrompt = `${character.prompt}\n\n当前情境：这是"AI穿越之旅"游戏，玩家是一位来自未来的时间旅行者，正在与你一起工作。\n请保持角色设定，用中文回复。回复要简洁有趣，适合游戏对话，不超过150字。\n可以适当加入emoji增加趣味性。`;
+        const systemPrompt = `${character.prompt || '你是' + character.name}\n\n当前情境：这是"AI穿越之旅"游戏，玩家是一位来自未来的时间旅行者，正在与你一起工作。\n请保持角色设定，用中文回复。回复要简洁有趣，适合游戏对话，不超过150字。\n可以适当加入emoji增加趣味性。`;
 
         const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
             method: 'POST',
