@@ -107,6 +107,50 @@
 
             <!-- 主内容区 -->
             <div class="game-main">
+                <!-- 世界地图过渡画面 -->
+                <div id="world-map-screen" class="world-map-overlay" style="display:none;">
+                    <div class="map-container">
+                        <div class="map-title" id="map-title"></div>
+                        <div class="map-year" id="map-year"></div>
+                        <svg class="world-map-svg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">
+                            <!-- 简化世界地图轮廓 -->
+                            <defs>
+                                <radialGradient id="pulse-gradient">
+                                    <stop offset="0%" stop-color="#E8C547" stop-opacity="1"/>
+                                    <stop offset="100%" stop-color="#E8C547" stop-opacity="0"/>
+                                </radialGradient>
+                                <filter id="glow">
+                                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                    <feMerge>
+                                        <feMergeNode in="coloredBlur"/>
+                                        <feMergeNode in="SourceGraphic"/>
+                                    </feMerge>
+                                </filter>
+                            </defs>
+                            <!-- 北美洲 -->
+                            <path d="M50,50 L180,40 L220,80 L230,120 L250,160 L240,200 L220,220 L200,240 L180,230 L160,250 L140,240 L120,220 L100,200 L80,180 L60,150 L40,120 L30,80 Z" fill="rgba(232,197,71,0.15)" stroke="rgba(232,197,71,0.4)" stroke-width="0.8"/>
+                            <!-- 南美洲 -->
+                            <path d="M200,280 L230,260 L260,280 L270,320 L260,370 L240,400 L220,420 L200,410 L190,380 L180,340 L185,300 Z" fill="rgba(232,197,71,0.15)" stroke="rgba(232,197,71,0.4)" stroke-width="0.8"/>
+                            <!-- 欧洲 -->
+                            <path d="M430,40 L500,35 L530,50 L520,80 L510,100 L490,110 L470,120 L450,110 L440,90 L435,70 Z" fill="rgba(232,197,71,0.15)" stroke="rgba(232,197,71,0.4)" stroke-width="0.8"/>
+                            <!-- 非洲 -->
+                            <path d="M440,140 L500,130 L530,160 L540,220 L530,300 L510,350 L480,370 L460,350 L440,300 L430,240 L435,180 Z" fill="rgba(232,197,71,0.15)" stroke="rgba(232,197,71,0.4)" stroke-width="0.8"/>
+                            <!-- 亚洲 -->
+                            <path d="M540,30 L700,20 L780,40 L800,80 L790,120 L770,160 L740,180 L700,190 L660,180 L620,160 L580,140 L560,110 L545,80 L540,50 Z" fill="rgba(232,197,71,0.15)" stroke="rgba(232,197,71,0.4)" stroke-width="0.8"/>
+                            <!-- 大洋洲 -->
+                            <path d="M750,300 L820,290 L860,310 L850,340 L820,350 L780,340 L760,320 Z" fill="rgba(232,197,71,0.15)" stroke="rgba(232,197,71,0.4)" stroke-width="0.8"/>
+                            <!-- 闪烁圆点（动态定位） -->
+                            <circle id="map-pulse-outer" cx="0" cy="0" r="20" fill="url(#pulse-gradient)" opacity="0"/>
+                            <circle id="map-pulse-ring1" cx="0" cy="0" r="8" fill="none" stroke="#E8C547" stroke-width="1.5" opacity="0"/>
+                            <circle id="map-pulse-ring2" cx="0" cy="0" r="15" fill="none" stroke="#E8C547" stroke-width="1" opacity="0"/>
+                            <circle id="map-dot" cx="0" cy="0" r="4" fill="#E8C547" filter="url(#glow)" opacity="0"/>
+                            <!-- 地点标签 -->
+                            <text id="map-label" x="0" y="0" fill="#E8C547" font-size="12" font-weight="600" text-anchor="middle" opacity="0"></text>
+                        </svg>
+                        <div class="map-countdown" id="map-countdown"></div>
+                    </div>
+                </div>
+
                 <!-- 左侧：场景与对话 -->
                 <div class="scene-panel">
                     <div class="scene-image" id="scene-image">

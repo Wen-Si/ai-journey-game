@@ -61,6 +61,7 @@ const GameData = {
             title: '机械之心：天才与嫉妒',
             year: '1642',
             location: '法国鲁昂',
+            mapCoords: { left: 47, top: 28 },  // 法国鲁昂在世界地图上的大致位置
             character: '布莱兹·帕斯卡',
             characterIcon: '👨‍🔬',
             characterRole: '数学家、物理学家',
@@ -589,6 +590,7 @@ const GameData = {
             title: '差分机：天才与疯狂',
             year: '1822',
             location: '英国伦敦',
+            mapCoords: { left: 46.5, top: 24 },  // 英国伦敦
             character: '查尔斯·巴贝奇',
             characterIcon: '👨‍💼',
             characterRole: '数学家、发明家',
@@ -1074,6 +1076,7 @@ const GameData = {
             title: '图灵的密码：天才与迫害',
             year: '1943',
             location: '英国布莱切利园',
+            mapCoords: { left: 46.5, top: 24 },  // 英国布莱切利园（伦敦附近）
             character: '艾伦·图灵',
             characterIcon: '👨‍💻',
             characterRole: '数学家、计算机科学之父',
@@ -1554,6 +1557,7 @@ const GameData = {
             title: '达特茅斯的召唤：梦想与分歧',
             year: '1956',
             location: '美国达特茅斯学院',
+            mapCoords: { left: 22, top: 30 },  // 美国新罕布什尔州达特茅斯
             character: '约翰·麦卡锡',
             characterIcon: '👨‍🏫',
             characterRole: '计算机科学家，AI之父',
@@ -2040,6 +2044,7 @@ const GameData = {
             title: '深蓝的决战：人与机器的较量',
             year: '1997',
             location: '美国纽约',
+            mapCoords: { left: 24, top: 30 },  // 美国纽约
             character: 'IBM深蓝团队',
             characterIcon: '♟️',
             characterRole: '超级计算机研发团队',
@@ -2532,6 +2537,7 @@ const GameData = {
             title: '深度学习的黎明：孤独与坚持',
             year: '2006',
             location: '加拿大多伦多',
+            mapCoords: { left: 21, top: 27 },  // 加拿大多伦多
             character: '杰弗里·辛顿',
             characterIcon: '🧠',
             characterRole: '深度学习之父',
@@ -3036,6 +3042,7 @@ const GameData = {
             title: 'Transformer：注意力就是一切',
             year: '2017',
             location: '美国谷歌总部',
+            mapCoords: { left: 11, top: 34 },  // 美国加州山景城
             character: 'Transformer研究团队',
             characterIcon: '⚡',
             characterRole: '革命性架构的发明者',
@@ -3540,6 +3547,7 @@ const GameData = {
             title: 'GPT时刻：通用人工智能的曙光',
             year: '2022',
             location: '美国OpenAI总部',
+            mapCoords: { left: 11, top: 34 },  // 美国旧金山
             character: 'OpenAI研究团队',
             characterIcon: '🤖',
             characterRole: '大语言模型的先驱',

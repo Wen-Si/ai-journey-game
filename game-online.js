@@ -302,21 +302,157 @@ class AIJourneyGameOnline {
             scenePanel.style.background = era.bgGradient;
         }
 
-        // 渲染角色列表
-        this.renderCharacters(level);
-
-        // 初始化幕系统
-        this.currentActIndex = 0;
-        if (level.acts && level.acts.length > 0) {
-            this.currentAct = level.acts[0];
-            this.loadAct(this.currentAct, level);
-        } else {
-            // 兼容旧数据结构
-            this.loadLegacyLevel(level);
-        }
-
         // 更新时间线
         this.renderTimeline();
+
+        // 显示世界地图过渡画面，5秒后进入关卡
+        if (level.mapCoords) {
+            this.showWorldMap(level, () => {
+                // 地图过渡结束后，加载关卡内容
+                this.renderCharacters(level);
+                this.currentActIndex = 0;
+                if (level.acts && level.acts.length > 0) {
+                    this.currentAct = level.acts[0];
+                    this.loadAct(this.currentAct, level);
+                } else {
+                    this.loadLegacyLevel(level);
+                }
+            });
+        } else {
+            // 没有地图坐标，直接进入关卡
+            this.renderCharacters(level);
+            this.currentActIndex = 0;
+            if (level.acts && level.acts.length > 0) {
+                this.currentAct = level.acts[0];
+                this.loadAct(this.currentAct, level);
+            } else {
+                this.loadLegacyLevel(level);
+            }
+        }
+    }
+
+    // 显示世界地图过渡画面
+    showWorldMap(level, onComplete) {
+        const mapScreen = document.getElementById('world-map-screen');
+        if (!mapScreen) {
+            onComplete();
+            return;
+        }
+
+        const coords = level.mapCoords;
+        const title = level.title;
+        const year = level.year;
+        const location = level.location;
+
+        // 设置标题和年份
+        document.getElementById('map-title').textContent = title;
+        document.getElementById('map-year').textContent = `${year} · ${location}`;
+        document.getElementById('map-countdown').textContent = '';
+
+        // 显示地图
+        mapScreen.style.display = 'flex';
+        mapScreen.style.animation = 'none';
+        mapScreen.offsetHeight; // 触发重绘
+        mapScreen.style.animation = 'mapFadeIn 0.8s ease';
+
+        // 将百分比坐标转换为SVG坐标（viewBox: 0 0 1000 500）
+        const svgX = coords.left * 10;
+        const svgY = coords.top * 5;
+
+        // 获取SVG元素
+        const dot = document.getElementById('map-dot');
+        const pulseOuter = document.getElementById('map-pulse-outer');
+        const ring1 = document.getElementById('map-pulse-ring1');
+        const ring2 = document.getElementById('map-pulse-ring2');
+        const label = document.getElementById('map-label');
+
+        // 先隐藏所有动画元素
+        [dot, pulseOuter, ring1, ring2, label].forEach(el => {
+            if (el) el.setAttribute('opacity', '0');
+        });
+
+        // 1秒后开始显示闪烁圆点
+        setTimeout(() => {
+            // 设置位置
+            [dot, pulseOuter, ring1, ring2].forEach(el => {
+                if (el) {
+                    el.setAttribute('cx', svgX);
+                    el.setAttribute('cy', svgY);
+                }
+            });
+            label.setAttribute('x', svgX);
+            label.setAttribute('y', svgY - 15);
+            label.textContent = location;
+
+            // 显示圆点
+            dot.setAttribute('opacity', '1');
+            dot.style.animation = 'none';
+            dot.offsetHeight;
+            dot.style.animation = 'mapDotAppear 0.5s ease forwards';
+
+            // 显示脉冲光晕
+            pulseOuter.setAttribute('opacity', '0.6');
+            pulseOuter.style.animation = 'none';
+            pulseOuter.offsetHeight;
+            pulseOuter.style.animation = 'mapPulseOuter 1.5s ease-out infinite';
+
+            // 显示扩散环1
+            ring1.setAttribute('opacity', '0.7');
+            ring1.style.animation = 'none';
+            ring1.offsetHeight;
+            ring1.style.animation = 'mapPulseRing1 1.5s ease-out infinite';
+
+            // 显示扩散环2（延迟）
+            setTimeout(() => {
+                ring2.setAttribute('opacity', '0.5');
+                ring2.style.animation = 'none';
+                ring2.offsetHeight;
+                ring2.style.animation = 'mapPulseRing2 1.5s ease-out infinite';
+            }, 500);
+
+            // 显示地点标签
+            label.setAttribute('opacity', '1');
+            label.style.animation = 'none';
+            label.offsetHeight;
+            label.style.animation = 'mapLabelAppear 0.5s ease forwards';
+        }, 800);
+
+        // 倒计时
+        let countdown = 5;
+        const countdownEl = document.getElementById('map-countdown');
+        
+        const countdownInterval = setInterval(() => {
+            countdown--;
+            if (countdown > 0) {
+                countdownEl.textContent = `即将传送... ${countdown}`;
+            } else {
+                clearInterval(countdownInterval);
+                countdownEl.textContent = '传送中...';
+            }
+        }, 1000);
+        countdownEl.textContent = `即将传送... ${countdown}`;
+
+        // 5秒后淡出地图，进入关卡
+        setTimeout(() => {
+            clearInterval(countdownInterval);
+            
+            // 停止所有动画
+            [dot, pulseOuter, ring1, ring2].forEach(el => {
+                if (el) el.style.animation = 'none';
+            });
+
+            // 淡出
+            mapScreen.style.animation = 'mapFadeOut 0.6s ease forwards';
+            
+            setTimeout(() => {
+                mapScreen.style.display = 'none';
+                // 重置动画元素
+                [dot, pulseOuter, ring1, ring2, label].forEach(el => {
+                    if (el) el.setAttribute('opacity', '0');
+                });
+                onComplete();
+            }, 600);
+        }, 5000);
     }
 
     // 加载幕内容
