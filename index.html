@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI穿越之旅 - 玩游戏学AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- 启动画面 -->
+        <div id="boot-screen" class="screen active">
+            <div class="boot-content">
+                <div class="boot-logo">
+                    <div class="logo-icon">🧠</div>
+                    <h1 class="logo-title">AI穿越之旅</h1>
+                    <p class="logo-subtitle">玩游戏 · 学AI · 探索智能的边界</p>
+                </div>
+                <div class="boot-terminal">
+                    <div class="terminal-line"><span class="prompt">$</span> 初始化时空穿梭系统...</div>
+                    <div class="terminal-line"><span class="prompt">$</span> 加载AI历史数据库... <span class="ok">[完成]</span></div>
+                    <div class="terminal-line"><span class="prompt">$</span> 连接GLM4.5-Flash神经网络... <span class="ok">[完成]</span></div>
+                    <div class="terminal-line"><span class="prompt">$</span> 校准时间线坐标... <span class="ok">[完成]</span></div>
+                    <div class="terminal-line"><span class="prompt">$</span> 系统就绪，等待玩家接入...</div>
+                </div>
+                <button id="start-btn" class="btn-primary">开始穿越</button>
+            </div>
+            <div class="particles-container"></div>
+        </div>
+
+        <!-- 角色创建画面 -->
+        <div id="character-screen" class="screen">
+            <div class="character-content">
+                <h2 class="section-title">创建你的角色</h2>
+                <p class="section-desc">在AI时代被替代的你，即将踏上寻找人类价值的旅程</p>
+                
+                <div class="character-form">
+                    <div class="form-group">
+                        <label>你的名字</label>
+                        <input type="text" id="player-name" placeholder="输入你的名字" maxlength="10">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>选择你的专长</label>
+                        <div class="specialty-grid">
+                            <div class="specialty-card" data-specialty="logic">
+                                <div class="specialty-icon">⚡</div>
+                                <div class="specialty-name">逻辑推理</div>
+                                <div class="specialty-desc">擅长分析和解决复杂问题</div>
+                            </div>
+                            <div class="specialty-card" data-specialty="creative">
+                                <div class="specialty-icon">🎨</div>
+                                <div class="specialty-name">创造力</div>
+                                <div class="specialty-desc">善于创新和突破常规思维</div>
+                            </div>
+                            <div class="specialty-card" data-specialty="empathy">
+                                <div class="specialty-icon">💝</div>
+                                <div class="specialty-name">共情能力</div>
+                                <div class="specialty-desc">理解他人，建立深度连接</div>
+                            </div>
+                            <div class="specialty-card" data-specialty="tech">
+                                <div class="specialty-icon">🔧</div>
+                                <div class="specialty-name">技术天赋</div>
+                                <div class="specialty-desc">快速掌握新技术和工具</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="confirm-character-btn" class="btn-primary" disabled>确认并开始旅程</button>
+            </div>
+        </div>
+
+        <!-- 主游戏画面 -->
+        <div id="game-screen" class="screen">
+            <!-- 顶部状态栏 -->
+            <div class="status-bar">
+                <div class="status-left">
+                    <div class="player-avatar">
+                        <span id="player-avatar-icon">👤</span>
+                    </div>
+                    <div class="player-info">
+                        <div id="display-name" class="player-name">玩家</div>
+                        <div id="display-specialty" class="player-specialty">专长</div>
+                    </div>
+                </div>
+                <div class="status-center">
+                    <div class="timeline-indicator">
+                        <div class="timeline-era" id="current-era">机械计算时代</div>
+                        <div class="timeline-year" id="current-year">1642-1940s</div>
+                    </div>
+                </div>
+                <div class="status-right">
+                    <div class="stat-item">
+                        <span class="stat-icon">⭐</span>
+                        <span id="wisdom-points">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">❤️</span>
+                        <span id="health-points">100</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="game-main">
+                <!-- 左侧：场景与对话 -->
+                <div class="scene-panel">
+                    <div class="scene-image" id="scene-image">
+                        <div class="scene-placeholder">
+                            <div class="scene-era-badge" id="scene-badge">机械计算时代</div>
+                        </div>
+                    </div>
+                    
+                    <div class="dialogue-box" id="dialogue-box">
+                        <div class="dialogue-speaker" id="dialogue-speaker">系统</div>
+                        <div class="dialogue-text" id="dialogue-text">
+                            欢迎来到AI穿越之旅！
+                        </div>
+                        <div class="dialogue-continue" id="dialogue-continue">点击继续 ↓</div>
+                    </div>
+                </div>
+
+                <!-- 右侧：信息与选择 -->
+                <div class="info-panel">
+                    <!-- 时间线 -->
+                    <div class="timeline-panel">
+                        <h3 class="panel-title">📅 时间线</h3>
+                        <div class="timeline-track" id="timeline-track">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 角色列表 -->
+                    <div class="characters-panel">
+                        <h3 class="panel-title">👥 同行者</h3>
+                        <div class="character-list" id="character-list">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 选择区 -->
+                    <div class="choices-panel" id="choices-panel">
+                        <h3 class="panel-title">🎯 你的选择</h3>
+                        <div class="choices-list" id="choices-list">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 知识卡片弹窗 -->
+        <div id="knowledge-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">📚 知识点</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body" id="knowledge-content">
+                    <!-- 动态生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- AI对话弹窗 -->
+        <div id="ai-chat-modal" class="modal">
+            <div class="modal-content chat-modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="chat-character-name">与AI角色对话</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="chat-messages" id="chat-messages">
+                    <!-- 动态生成 -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="输入你想说的话..." maxlength="200">
+                    <button id="chat-send-btn" class="btn-small">发送</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 关卡完成画面 -->
+        <div id="level-complete-screen" class="screen">
+            <div class="level-complete-content">
+                <div class="complete-icon">🎉</div>
+                <h2 class="complete-title">关卡完成！</h2>
+                <div class="complete-stats">
+                    <div class="stat-box">
+                        <div class="stat-value" id="complete-wisdom">+0</div>
+                        <div class="stat-label">智慧值</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="complete-knowledge">0</div>
+                        <div class="stat-label">知识点</div>
+                    </div>
+                </div>
+                <div class="complete-knowledge-list" id="complete-knowledge-list">
+                    <!-- 动态生成 -->
+                </div>
+                <button id="next-level-btn" class="btn-primary">进入下一时代</button>
+            </div>
+        </div>
+
+        <!-- 游戏结束画面 -->
+        <div id="game-over-screen" class="screen">
+            <div class="game-over-content">
+                <div class="over-icon" id="over-icon">🏆</div>
+                <h2 class="over-title" id="over-title">旅程结束</h2>
+                <p class="over-desc" id="over-desc">你的AI穿越之旅已经完成</p>
+                <div class="final-stats">
+                    <div class="final-stat">
+                        <span class="final-label">总智慧值</span>
+                        <span class="final-value" id="final-wisdom">0</span>
+                    </div>
+                    <div class="final-stat">
+                        <span class="final-label">收集知识点</span>
+                        <span class="final-value" id="final-knowledge">0</span>
+                    </div>
+                    <div class="final-stat">
+                        <span class="final-label">到达时代</span>
+                        <span class="final-value" id="final-era">-</span>
+                    </div>
+                </div>
+                <div class="over-ending" id="over-ending">
+                    <!-- 动态生成结局文本 -->
+                </div>
+                <button id="restart-btn" class="btn-primary">重新开始</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game-data.js"></script>
+    <script src="api-client.js"></script>
+    <script src="game-online.js"></script>
+</body>
+</html>

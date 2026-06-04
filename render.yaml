@@ -1,0 +1,8 @@
+{
+  "name": "ai-journey-game",
+  "buildCommand": "cd backend && npm install",
+  "startCommand": "cd backend && npm start",
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
