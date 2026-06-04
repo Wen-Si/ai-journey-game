@@ -74,8 +74,9 @@ class AIJourneyGameOnline {
             this.startGame();
         });
 
-        // 对话点击
-        document.getElementById('dialogue-box').addEventListener('click', () => {
+        // 继续按钮点击
+        document.getElementById('dialogue-continue-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
             this.advanceDialogue();
         });
 
@@ -282,6 +283,13 @@ class AIJourneyGameOnline {
 
     // 设置关卡UI
     setupLevelUI(level) {
+        // 确保 GameData 已加载
+        if (typeof GameData === 'undefined') {
+            console.warn('GameData 未加载，延迟设置关卡UI');
+            setTimeout(() => this.setupLevelUI(level), 200);
+            return;
+        }
+        
         // 更新时代信息
         const era = GameData.eras.find(e => e.id === level.eraId);
         document.getElementById('current-era').textContent = era.name;
@@ -317,6 +325,9 @@ class AIJourneyGameOnline {
         
         // 重置对话状态，防止旧状态干扰
         this.isShowingDialogue = false;
+        
+        // 重新渲染角色列表（因为新幕可能有新角色）
+        this.renderCharacters(level);
         
         // 构建对话队列
         this.dialogueQueue = [];
@@ -481,13 +492,14 @@ class AIJourneyGameOnline {
         this.isShowingDialogue = true;
         const speakerEl = document.getElementById('dialogue-speaker');
         const textEl = document.getElementById('dialogue-text');
-        const continueEl = document.getElementById('dialogue-continue');
+        const continueBtn = document.getElementById('dialogue-continue-btn');
 
         if (!speakerEl || !textEl) return;
 
         speakerEl.textContent = dialogue.speaker;
         textEl.textContent = '';
-        if (continueEl) continueEl.style.opacity = '0';
+        // 隐藏继续按钮，等打字完成后再显示
+        if (continueBtn) continueBtn.style.display = 'none';
 
         // 打字机效果
         let index = 0;
@@ -500,7 +512,8 @@ class AIJourneyGameOnline {
             } else {
                 clearInterval(typeInterval);
                 this.isShowingDialogue = false;
-                if (continueEl) continueEl.style.opacity = '1';
+                // 打字完成，显示继续按钮
+                if (continueBtn) continueBtn.style.display = 'block';
             }
         }, 30);
     }
@@ -568,11 +581,53 @@ class AIJourneyGameOnline {
                 <div class="choice-text">${choice.text}</div>
                 <div class="choice-hint">${this.getChoiceHint(choice.type)}</div>
             `;
-            btn.addEventListener('click', () => this.makeChoice(index));
+            btn.addEventListener('click', () => this.onChoiceSelected(index, btn, choicesList));
             choicesList.appendChild(btn);
         });
 
         choicesPanel.style.display = 'block';
+    }
+    
+    // 玩家选择了某个选项（但还未确认）
+    onChoiceSelected(choiceIndex, selectedBtn, choicesList) {
+        // 禁用所有选择按钮
+        choicesList.querySelectorAll('.choice-btn').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+        });
+        
+        // 高亮选中的按钮
+        selectedBtn.style.opacity = '1';
+        selectedBtn.classList.add('selected');
+        
+        // 显示确认按钮
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'choice-confirm-btn';
+        confirmBtn.textContent = '确认选择';
+        confirmBtn.addEventListener('click', () => {
+            this.makeChoice(choiceIndex);
+        });
+        
+        // 添加取消按钮
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'choice-cancel-btn';
+        cancelBtn.textContent = '重新选择';
+        cancelBtn.addEventListener('click', () => {
+            // 恢复所有按钮
+            choicesList.querySelectorAll('.choice-btn').forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.classList.remove('selected');
+            });
+            confirmBtn.remove();
+            cancelBtn.remove();
+        });
+        
+        const choicesPanel = document.getElementById('choices-panel');
+        if (choicesPanel) {
+            choicesPanel.appendChild(confirmBtn);
+            choicesPanel.appendChild(cancelBtn);
+        }
     }
 
     // 获取选择提示
@@ -639,7 +694,14 @@ class AIJourneyGameOnline {
     // 做出选择
     async makeChoice(choiceIndex) {
         const choicesPanel = document.getElementById('choices-panel');
-        if (choicesPanel) choicesPanel.style.display = 'none';
+        if (choicesPanel) {
+            // 移除确认和取消按钮
+            const confirmBtn = choicesPanel.querySelector('.choice-confirm-btn');
+            const cancelBtn = choicesPanel.querySelector('.choice-cancel-btn');
+            if (confirmBtn) confirmBtn.remove();
+            if (cancelBtn) cancelBtn.remove();
+            choicesPanel.style.display = 'none';
+        }
 
         if (this.isOnline) {
             try {
