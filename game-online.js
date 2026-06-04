@@ -17,11 +17,14 @@ class AIJourneyGameOnline {
         
         this.currentLevel = 0;
         this.currentScene = null;
+        this.currentAct = null;      // 当前幕
+        this.currentActIndex = 0;    // 当前幕索引
         this.gameState = 'boot';
         this.dialogueQueue = [];
         this.isShowingDialogue = false;
         this.levelData = null;
         this.isOnline = false;
+        this.globalState = {};       // 全局状态追踪
         
         this.init();
     }
@@ -288,12 +291,49 @@ class AIJourneyGameOnline {
         // 渲染角色列表
         this.renderCharacters(level);
 
-        // 设置对话队列
-        this.dialogueQueue = [
-            { speaker: '系统', text: `欢迎来到${level.year}年的${level.location}。`, icon: '🌐' },
-            { speaker: '系统', text: level.description, icon: '🌐' },
-            { speaker: level.character, text: this.getCharacterGreeting(level), icon: level.characterIcon }
-        ];
+        // 初始化幕系统
+        this.currentActIndex = 0;
+        if (level.acts && level.acts.length > 0) {
+            this.currentAct = level.acts[0];
+            this.loadAct(this.currentAct, level);
+        } else {
+            // 兼容旧数据结构
+            this.loadLegacyLevel(level);
+        }
+
+        // 更新时间线
+        this.renderTimeline();
+    }
+
+    // 加载幕内容
+    loadAct(act, level) {
+        this.currentAct = act;
+        
+        // 构建对话队列
+        this.dialogueQueue = [];
+        
+        // 如果是第一幕，添加关卡介绍
+        if (this.currentActIndex === 0) {
+            this.dialogueQueue.push(
+                { speaker: '系统', text: `欢迎来到${level.year}年的${level.location}。`, icon: '🌐' }
+            );
+        }
+        
+        // 添加幕标题
+        this.dialogueQueue.push(
+            { speaker: '系统', text: `【${act.title}】`, icon: '📖' }
+        );
+        
+        // 添加场景对话
+        if (act.scenes && act.scenes.length > 0) {
+            act.scenes.forEach(scene => {
+                this.dialogueQueue.push({
+                    speaker: scene.speaker,
+                    text: scene.text,
+                    icon: scene.icon || '🌐'
+                });
+            });
+        }
 
         // 隐藏选择面板
         const choicesPanel = document.getElementById('choices-panel');
@@ -302,9 +342,21 @@ class AIJourneyGameOnline {
         // 开始显示对话
         this.isShowingDialogue = false;
         this.advanceDialogue();
+    }
 
-        // 更新时间线
-        this.renderTimeline();
+    // 兼容旧数据结构
+    loadLegacyLevel(level) {
+        this.dialogueQueue = [
+            { speaker: '系统', text: `欢迎来到${level.year}年的${level.location}。`, icon: '🌐' },
+            { speaker: '系统', text: level.description, icon: '🌐' },
+            { speaker: level.character, text: this.getCharacterGreeting(level), icon: level.characterIcon }
+        ];
+
+        const choicesPanel = document.getElementById('choices-panel');
+        if (choicesPanel) choicesPanel.style.display = 'none';
+
+        this.isShowingDialogue = false;
+        this.advanceDialogue();
     }
 
     // 获取角色问候语
@@ -404,7 +456,34 @@ class AIJourneyGameOnline {
         
         choicesList.innerHTML = '';
         
-        level.choices.forEach((choice, index) => {
+        // 新数据结构：从当前幕获取选择
+        let choices = [];
+        if (this.currentAct && this.currentAct.choices) {
+            choices = this.currentAct.choices;
+        } else if (level.choices) {
+            // 兼容旧数据结构
+            choices = level.choices;
+        }
+        
+        if (choices.length === 0) {
+            // 如果没有选择，直接进入下一关
+            this.dialogueQueue.push({
+                speaker: '系统',
+                text: '本幕结束。',
+                icon: '🌐'
+            });
+            this.advanceDialogue();
+            setTimeout(() => {
+                this.showLevelComplete({
+                    wisdomBonus: 0,
+                    totalWisdom: this.player.wisdom,
+                    newKnowledge: level.knowledgePoints || []
+                });
+            }, 1500);
+            return;
+        }
+        
+        choices.forEach((choice, index) => {
             const btn = document.createElement('button');
             btn.className = 'choice-btn';
             btn.innerHTML = `
@@ -427,7 +506,54 @@ class AIJourneyGameOnline {
             neutral: '📖 保守观察',
             practical: '🔧 实用主义',
             empathy: '💝 人文关怀',
-            strategic: '🎯 战略思考'
+            strategic: '🎯 战略思考',
+            // 新增类型
+            revolutionary: '🔥 颠覆性变革',
+            cautious: '🛡️ 谨慎行事',
+            insightful: '💡 深刻洞见',
+            diplomatic: '🕊️ 外交手腕',
+            loyal: '🤝 忠诚支持',
+            visionary: '🔮 远见卓识',
+            determined: '💪 坚定不移',
+            sacrifice: '🦸 自我牺牲',
+            redemption: '🌅 救赎之路',
+            cold: '❄️ 冷酷决断',
+            honest: '🗣️ 坦诚相见',
+            deceptive: '🎭 策略性隐瞒',
+            scientific: '🔬 科学严谨',
+            emotional: '❤️ 情感驱动',
+            open: '📂 开放共享',
+            patient: '⏳ 耐心等待',
+            collaborative: '🤲 合作共赢',
+            independent: '🦅 独立自主',
+            business: '💼 商业导向',
+            idealistic: '🌈 理想主义',
+            innovative: '🚀 创新突破',
+            responsible: '⚖️ 负责任',
+            proactive: '🎯 主动出击',
+            transparent: '🔍 透明公开',
+            sustainable: '🌱 可持续发展',
+            pure: '✨ 纯粹追求',
+            academic: '🎓 学术导向',
+            action: '⚡ 立即行动',
+            research: '🔍 深入研究',
+            forward: '➡️ 前瞻布局',
+            balanced: '⚖️ 平衡之道',
+            decisive: '⚔️ 果断决策',
+            pragmatic: '🛠️ 务实方案',
+            celebratory: '🎉 庆祝成功',
+            urgent: '🚨 紧急行动',
+            thorough: '📋  thorough研究',
+            scalable: '📈 扩展规模',
+            monetization: '💰 商业化',
+            iterative: '🔄 迭代优化',
+            reactive: '🛡️ 应对危机',
+            pivot: '🔄 战略转型',
+            hybrid: '🔀 混合方案',
+            technical: '⚙️ 技术优化',
+            openSource: '🌍 开源共享',
+            conservative: '📜 保守稳健',
+            cold_calculated: '🧮 冷静计算'
         };
         return hints[type] || '';
     }
@@ -481,9 +607,18 @@ class AIJourneyGameOnline {
     // 离线模式做出选择
     makeChoiceOffline(choiceIndex) {
         const level = GameData.levels[this.currentLevel];
-        const choice = level.choices[choiceIndex];
         
-        let wisdomBonus = choice.wisdomBonus;
+        // 获取选择 - 支持新数据结构
+        let choice;
+        if (this.currentAct && this.currentAct.choices) {
+            choice = this.currentAct.choices[choiceIndex];
+        } else {
+            choice = level.choices[choiceIndex];
+        }
+        
+        if (!choice) return;
+        
+        let wisdomBonus = choice.wisdomBonus || 0;
         
         // 专长加成
         if (this.player.specialty === 'logic' && (choice.type === 'good' || choice.type === 'strategic')) {
@@ -499,42 +634,64 @@ class AIJourneyGameOnline {
         this.player.wisdom += wisdomBonus;
         this.player.choices.push({
             level: this.currentLevel,
+            act: this.currentAct ? this.currentAct.id : null,
             choice: choice.text,
             type: choice.type
         });
 
         this.updatePlayerUI();
 
-        const resultText = this.getDefaultResult(choice.type);
+        // 处理选择后果
+        const consequences = choice.consequences || {};
+        const consequenceDesc = consequences.description || this.getDefaultResult(choice.type);
         
         this.dialogueQueue = [
-            { speaker: '系统', text: resultText, icon: '🌐' },
+            { speaker: '系统', text: consequenceDesc, icon: '🌐' },
             { speaker: '系统', text: `智慧值 +${wisdomBonus}！`, icon: '⭐' }
         ];
 
-        // 收集知识点
-        if (level.knowledgePoints) {
-            level.knowledgePoints.forEach(kp => {
-                if (!this.player.knowledgeCollected.find(k => k.title === kp.title)) {
-                    this.player.knowledgeCollected.push(kp);
-                    this.dialogueQueue.push({
-                        speaker: '系统',
-                        text: `📚 获得知识点：${kp.title}！`,
-                        icon: '📚'
-                    });
-                }
-            });
+        // 更新全局状态
+        if (consequences.stateChanges) {
+            Object.assign(this.globalState, consequences.stateChanges);
         }
 
         this.advanceDialogue();
 
+        // 判断是进入下一幕还是完成关卡
+        const nextActId = consequences.nextAct;
+        
+        if (nextActId && level.acts) {
+            // 查找下一幕
+            const nextAct = level.acts.find(a => a.id === nextActId);
+            if (nextAct) {
+                // 延迟后进入下一幕
+                setTimeout(() => {
+                    this.currentActIndex = level.acts.indexOf(nextAct);
+                    this.loadAct(nextAct, level);
+                }, 2500);
+                return;
+            }
+        }
+        
+        // 没有下一幕，完成关卡
         setTimeout(() => {
+            // 收集知识点
+            let newKnowledge = [];
+            if (level.knowledgePoints) {
+                level.knowledgePoints.forEach(kp => {
+                    if (!this.player.knowledgeCollected.find(k => k.title === kp.title)) {
+                        this.player.knowledgeCollected.push(kp);
+                        newKnowledge.push(kp);
+                    }
+                });
+            }
+            
             this.showLevelComplete({
                 wisdomBonus: wisdomBonus,
                 totalWisdom: this.player.wisdom,
-                newKnowledge: level.knowledgePoints || []
+                newKnowledge: newKnowledge
             });
-        }, 2000);
+        }, 2500);
     }
 
     // 获取默认结果
@@ -690,10 +847,13 @@ class AIJourneyGameOnline {
         };
         this.currentLevel = 0;
         this.currentScene = null;
+        this.currentAct = null;
+        this.currentActIndex = 0;
         this.gameState = 'boot';
         this.dialogueQueue = [];
         this.isShowingDialogue = false;
         this.isOnline = false;
+        this.globalState = {};
 
         // 重置UI
         document.getElementById('player-name').value = '';
