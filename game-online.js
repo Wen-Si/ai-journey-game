@@ -653,7 +653,7 @@ class AIJourneyGameOnline {
         speakerEl.textContent = dialogue.speaker;
         textEl.textContent = '';
         // 隐藏继续按钮，等打字完成后再显示
-        if (continueBtn) continueBtn.style.display = 'none';
+        if (continueBtn) continueBtn.classList.add('hidden');
 
         // 打字机效果
         let index = 0;
@@ -668,10 +668,7 @@ class AIJourneyGameOnline {
                 this.isShowingDialogue = false;
                 // 打字完成，显示继续按钮
                 if (continueBtn) {
-                    continueBtn.style.display = 'block';
-                    continueBtn.style.visibility = 'visible';
-                    continueBtn.style.opacity = '1';
-                    continueBtn.style.animation = 'pulse 2s infinite';
+                    continueBtn.classList.remove('hidden');
                 }
             }
         }, 30);

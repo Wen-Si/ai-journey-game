@@ -483,6 +483,11 @@ body {
     animation: pulse 2s infinite;
     transition: all 0.3s ease;
     font-family: inherit;
+    z-index: 10;
+}
+
+.dialogue-continue-btn.hidden {
+    display: none !important;
 }
 
 .dialogue-continue-btn:hover {
