@@ -212,13 +212,16 @@ class AIJourneyGameOnline {
     renderTimeline() {
         const track = document.getElementById('timeline-track');
         if (!track) return;
-        track.innerHTML = '';
         
         // 确保 GameData 已加载
         if (typeof GameData === 'undefined' || !GameData.levels) {
-            console.warn('GameData 未加载，时间线无法渲染');
+            console.warn('GameData 未加载，延迟渲染时间线');
+            // 延迟重试
+            setTimeout(() => this.renderTimeline(), 300);
             return;
         }
+        
+        track.innerHTML = '';
         
         const levels = this.levels || GameData.levels;
         levels.forEach((level, index) => {
@@ -541,7 +544,11 @@ class AIJourneyGameOnline {
     // 渲染角色列表
     renderCharacters(level) {
         const list = document.getElementById('character-list');
-        if (!list) return;
+        if (!list) {
+            console.warn('同行者列表元素不存在');
+            return;
+        }
+        
         list.innerHTML = '';
 
         // 新的数据结构：从关卡数据中提取角色信息
@@ -581,6 +588,17 @@ class AIJourneyGameOnline {
             characters.push(...oldChars);
         }
         
+        // 如果还是没有角色，添加默认角色
+        if (characters.length === 0) {
+            characters.push({
+                id: 'default',
+                name: level.character || '神秘人物',
+                icon: '❓',
+                role: 'partner',
+                era: level.eraId
+            });
+        }
+        
         characters.forEach(char => {
             const item = document.createElement('div');
             item.className = 'character-item';
@@ -588,7 +606,7 @@ class AIJourneyGameOnline {
                 <div class="char-icon">${char.icon}</div>
                 <div class="char-info">
                     <div class="char-name">${char.name}</div>
-                    <div class="char-role">${char.role === 'partner' ? '伙伴' : '对手'}</div>
+                    <div class="char-role">${char.role === 'partner' ? '同行者' : '对手'}</div>
                 </div>
                 <button class="chat-btn" data-character="${char.id}">💬</button>
             `;
@@ -649,7 +667,12 @@ class AIJourneyGameOnline {
                 clearInterval(typeInterval);
                 this.isShowingDialogue = false;
                 // 打字完成，显示继续按钮
-                if (continueBtn) continueBtn.style.display = 'block';
+                if (continueBtn) {
+                    continueBtn.style.display = 'block';
+                    continueBtn.style.visibility = 'visible';
+                    continueBtn.style.opacity = '1';
+                    continueBtn.style.animation = 'pulse 2s infinite';
+                }
             }
         }, 30);
     }
