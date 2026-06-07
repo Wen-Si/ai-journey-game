@@ -468,6 +468,9 @@ class AIJourneyGameOnline {
         // 重新渲染角色列表（因为新幕可能有新角色）
         this.renderCharacters(level);
         
+        // 渲染知识点列表
+        this.renderKnowledge(level);
+        
         // 构建对话队列
         this.dialogueQueue = [];
         
@@ -503,6 +506,101 @@ class AIJourneyGameOnline {
             this.isShowingDialogue = false;
             this.advanceDialogue();
         }, 100);
+    }
+
+    // 渲染知识点列表
+    renderKnowledge(level) {
+        const panel = document.getElementById('knowledge-panel');
+        const list = document.getElementById('knowledge-list');
+        if (!panel || !list) return;
+        
+        list.innerHTML = '';
+        
+        const knowledgePoints = level.knowledgePoints || [];
+        if (knowledgePoints.length === 0) {
+            panel.classList.remove('has-content');
+            return;
+        }
+        
+        panel.classList.add('has-content');
+        
+        knowledgePoints.forEach((kp, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'knowledge-item-btn';
+            btn.innerHTML = `
+                <div class="knowledge-title">📖 ${kp.title}</div>
+                <div class="knowledge-desc">${kp.content.substring(0, 50)}...</div>
+            `;
+            btn.addEventListener('click', () => this.explainKnowledge(kp, level));
+            list.appendChild(btn);
+        });
+    }
+
+    // AI讲解知识点
+    async explainKnowledge(kp, level) {
+        // 打开聊天窗口
+        this.openChat('knowledge_ai');
+        
+        // 显示加载
+        const loadingId = this.addChatMessage('ai', '正在准备讲解...', true);
+        
+        try {
+            const systemPrompt = `你是${level.character || 'AI导师'}，一位博学多才的学者。你的任务是用通俗易懂、生动有趣的方式讲解知识概念。
+
+当前要讲解的知识点：${kp.title}
+基础内容：${kp.content}
+
+讲解要求：
+1. 用第一人称"我"来讲解
+2. 结合历史背景和实际应用
+3. 使用类比和例子帮助理解
+4. 适当加入emoji增加趣味性
+5. 讲解不超过300字
+6. 结尾可以提出一个思考题引发玩家兴趣`;
+
+            const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer 325d6fa364954d2e871c30ba95b553bd.KBdQdqgJgELJBhnv'
+                },
+                body: JSON.stringify({
+                    model: 'glm-4.5-flash',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `请为我讲解"${kp.title}"这个知识点` }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 800,
+                    top_p: 0.9
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`API请求失败: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // 移除加载消息
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+            
+            if (data.choices && data.choices[0] && data.choices[0].message) {
+                this.addChatMessage('ai', data.choices[0].message.content);
+            } else {
+                throw new Error('API响应格式异常');
+            }
+        } catch (error) {
+            console.error('AI讲解失败:', error);
+            
+            // 移除加载消息
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+            
+            // 使用预设内容回退
+            this.addChatMessage('ai', `📖 **${kp.title}**\n\n${kp.content}\n\n💡 这是这个知识点的核心内容。如果你想深入了解，可以问我更具体的问题！`);
+        }
     }
 
     // 兼容旧数据结构
@@ -1210,6 +1308,17 @@ class AIJourneyGameOnline {
 
     // 打开聊天
     openChat(characterId) {
+        // 知识点讲解模式
+        if (characterId === 'knowledge_ai') {
+            const level = GameData.levels[this.currentLevel];
+            document.getElementById('chat-character-name').textContent = `📚 知识点讲解`;
+            document.getElementById('chat-messages').innerHTML = '';
+            document.getElementById('chat-input').value = '';
+            this.currentChatCharacter = 'knowledge_ai';
+            document.getElementById('ai-chat-modal').classList.add('active');
+            return;
+        }
+        
         let character = null;
         
         // 尝试从旧数据结构查找
@@ -1289,28 +1398,14 @@ class AIJourneyGameOnline {
 
     // 直接调用AI（离线模式回退）
     async callAIDirectly(message, characterId) {
-        let character = null;
+        const level = GameData.levels[this.currentLevel];
+        if (!level) return '角色不存在';
         
-        // 尝试从旧数据结构查找
-        if (Array.isArray(GameData.characters)) {
-            character = GameData.characters.find(c => c.id === characterId);
-        }
+        // 使用关卡的aiPrompt，如果没有则使用默认prompt
+        let systemPrompt = level.aiPrompt || `你是${level.character}，${level.characterRole || '历史人物'}。你在${level.year}年的${level.location}。`;
         
-        // 如果找不到，从当前关卡数据构建
-        if (!character) {
-            const level = GameData.levels[this.currentLevel];
-            if (level && level.character) {
-                character = {
-                    id: 'main',
-                    name: level.character,
-                    prompt: `你是${level.character}，${level.characterRole || '历史人物'}。你在${level.year}年的${level.location}。`
-                };
-            }
-        }
-        
-        if (!character) return '角色不存在';
-
-        const systemPrompt = `${character.prompt || '你是' + character.name}\n\n当前情境：这是"AI穿越之旅"游戏，玩家是一位来自未来的时间旅行者，正在与你一起工作。\n请保持角色设定，用中文回复。回复要简洁有趣，适合游戏对话，不超过150字。\n可以适当加入emoji增加趣味性。`;
+        // 添加游戏情境和回复要求
+        systemPrompt += `\n\n当前情境：这是"AI穿越之旅"游戏，玩家${this.player.name || '一位来自未来的时间旅行者'}正在与你互动交流。\n请严格保持角色设定，用第一人称回复。回复要简洁有趣，适合游戏对话，不超过200字。\n可以适当加入emoji增加趣味性。\n如果玩家询问知识点，请用通俗易懂的方式讲解。`;
 
         const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
             method: 'POST',
@@ -1330,8 +1425,17 @@ class AIJourneyGameOnline {
             })
         });
 
+        if (!response.ok) {
+            throw new Error(`API请求失败: ${response.status}`);
+        }
+
         const data = await response.json();
-        return data.choices[0].message.content;
+        
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+            return data.choices[0].message.content;
+        }
+        
+        throw new Error('API响应格式异常');
     }
 
     // 添加聊天消息

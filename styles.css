@@ -624,12 +624,58 @@ body {
 /* 时间线面板 */
 .timeline-panel,
 .characters-panel,
-.choices-panel {
+.choices-panel,
+.knowledge-panel {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 1.2rem;
     box-shadow: var(--shadow);
+}
+
+.knowledge-panel {
+    display: none; /* 默认隐藏，有关卡知识点时显示 */
+}
+
+.knowledge-panel.has-content {
+    display: block;
+}
+
+.knowledge-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.knowledge-item-btn {
+    background: rgba(232, 197, 71, 0.1);
+    border: 1px solid rgba(232, 197, 71, 0.3);
+    border-radius: 10px;
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+    font-family: inherit;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.knowledge-item-btn:hover {
+    background: rgba(232, 197, 71, 0.2);
+    border-color: var(--primary);
+    transform: translateX(3px);
+}
+
+.knowledge-item-btn .knowledge-title {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 0.2rem;
+}
+
+.knowledge-item-btn .knowledge-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
 }
 
 .timeline-track {
