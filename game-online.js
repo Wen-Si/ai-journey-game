@@ -730,7 +730,8 @@ class AIJourneyGameOnline {
                     this.handleChoiceAfterDialogue();
                 }
             } else {
-                this.showChoices();
+                // 对话结束，检查是否需要触发辩论
+                this.checkAndStartDebate();
             }
             return;
         }
@@ -1461,7 +1462,469 @@ class AIJourneyGameOnline {
     // Socket事件处理
     handleSocketEvent(data) {
         console.log('处理Socket事件:', data);
-        // 可以在这里处理实时多人游戏事件
+    }
+
+    // ============ AI辩论引擎 ============
+
+    // 检查并触发辩论
+    checkAndStartDebate() {
+        const level = this.levelData || GameData.levels[this.currentLevel];
+        if (!level || !level.debates || level.debates.length === 0) {
+            // 没有辩论配置，显示选择
+            this.showChoices();
+            return;
+        }
+
+        // 找到当前幕对应的辩论
+        const debateIndex = this.currentActIndex % level.debates.length;
+        const debate = level.debates[debateIndex];
+
+        if (debate && !this._debatePlayed) {
+            this._debatePlayed = true;
+            // 显示辩论入口按钮
+            this.showDebateEntry(debate);
+        } else {
+            this.showChoices();
+        }
+    }
+
+    // 显示辩论入口
+    showDebateEntry(debate) {
+        const choicesPanel = document.getElementById('choices-panel');
+        const choicesList = document.getElementById('choices-list');
+        if (!choicesPanel || !choicesList) return;
+
+        choicesList.innerHTML = '';
+
+        // 辩论入口按钮
+        const debateBtn = document.createElement('button');
+        debateBtn.className = 'choice-btn debate-entry-btn';
+        debateBtn.innerHTML = `
+            <div class="choice-text">⚔️ 进入辩论：${debate.topic}</div>
+            <div class="choice-hint">${debate.debaters.length}位辩手 · ${debate.rounds}轮辩论</div>
+        `;
+        debateBtn.addEventListener('click', async () => {
+            choicesPanel.style.display = 'none';
+            await this.startDebate(debate);
+            // 辩论结束后显示选择
+            this.showChoices();
+        });
+        choicesList.appendChild(debateBtn);
+
+        // 跳过辩论按钮
+        const skipBtn = document.createElement('button');
+        skipBtn.className = 'choice-btn';
+        skipBtn.innerHTML = `
+            <div class="choice-text">⏭️ 跳过辩论，直接选择</div>
+            <div class="choice-hint">跳过AI辩论环节</div>
+        `;
+        skipBtn.addEventListener('click', () => {
+            choicesPanel.style.display = 'none';
+            this.showChoices();
+        });
+        choicesList.appendChild(skipBtn);
+
+        choicesPanel.style.display = 'block';
+    }
+
+    // 开始一场AI辩论
+    async startDebate(debateConfig) {
+        this.currentDebate = debateConfig;
+        this.debateHistory = [];
+        this.debateRound = 0;
+        this.debateActive = true;
+
+        // 显示辩论UI
+        this.showDebateUI(debateConfig);
+
+        // 添加辩论开场
+        this.addDebateMessage('system', `📋 辩论主题：${debateConfig.topic}`, 'debate-topic');
+        this.addDebateMessage('system', debateConfig.description, 'debate-desc');
+        this.addDebateMessage('system', '--- 辩论开始 ---', 'debate-divider');
+
+        // 介绍辩手
+        debateConfig.debaters.forEach(d => {
+            this.addDebateMessage('system', `${d.icon} ${d.name}（${d.stance === 'pro' ? '正方' : d.stance === 'con' ? '反方' : '中立'}）`, 'debate-intro');
+        });
+
+        // 等待玩家阅读介绍
+        await this.waitForDebateContinue();
+
+        // 逐轮进行辩论
+        for (let round = 1; round <= debateConfig.rounds; round++) {
+            this.debateRound = round;
+            this.addDebateMessage('system', `━━ 第 ${round} 轮 ━━`, 'debate-round');
+
+            // 每个辩手发言
+            for (const debater of debateConfig.debaters) {
+                await this.generateDebateSpeech(debater, debateConfig);
+                // 辩手间短暂停顿
+                await this.sleep(800);
+            }
+
+            // 每轮结束后，玩家可以提问或发表观点
+            if (round < debateConfig.rounds) {
+                this.addDebateMessage('system', '💬 你可以提问或发表观点（输入后按回车，或点击"继续"跳过）', 'debate-prompt');
+                await this.waitForPlayerDebateInput(15000); // 15秒超时
+            }
+        }
+
+        // 辩论结束，AI总结
+        this.addDebateMessage('system', '--- 辩论结束 ---', 'debate-divider');
+        await this.generateDebateSummary(debateConfig);
+
+        // 显示知识点
+        this.addDebateMessage('system', '📚 核心知识点：', 'debate-kp-title');
+        debateConfig.keyPoints.forEach(kp => {
+            this.addDebateMessage('system', `• ${kp}`, 'debate-kp');
+        });
+
+        this.debateActive = false;
+        this.addDebateMessage('system', '点击"继续辩论"进入下一环节，或"结束辩论"返回游戏。', 'debate-end');
+    }
+
+    // 生成辩手发言
+    async generateDebateSpeech(debater, debateConfig) {
+        const loadingId = this.addDebateMessage(debater.icon, '正在发言...', 'debate-loading');
+
+        // 构建对话历史上下文
+        const historyText = this.debateHistory.map(h => `${h.speaker}: ${h.text}`).join('\n');
+
+        const systemPrompt = `你是一位历史人物${debater.name}，正在参与一场关于AI技术的辩论。
+
+辩论主题：${debateConfig.topic}
+你的立场：${debater.role}
+
+规则：
+1. 严格保持角色设定，用第一人称发言
+2. 回应之前其他辩手的观点（如果有）
+3. 用有力的论据支持你的立场
+4. 可以反驳对方的观点
+5. 语言生动有力，有辩论感
+6. 每次发言100-200字
+7. 适当引用历史事实和技术细节
+8. 可以使用反问、类比等辩论技巧`;
+
+        const userPrompt = `辩论历史：
+${historyText || '（这是第一轮发言）'}
+
+请以${debater.name}的身份发表你的第${this.debateRound}轮发言。`;
+
+        try {
+            const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer 325d6fa364954d2e871c30ba95b553bd.KBdQdqgJgELJBhnv'
+                },
+                body: JSON.stringify({
+                    model: 'glm-4.5-flash',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
+                    ],
+                    temperature: 0.8,
+                    max_tokens: 400,
+                    top_p: 0.9
+                })
+            });
+
+            // 移除加载
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+
+            if (response.ok) {
+                const data = await response.json();
+                const text = data.choices?.[0]?.message?.content || '（发言失败）';
+                
+                // 记录到辩论历史
+                this.debateHistory.push({ speaker: debater.name, text: text });
+                
+                // 打字机效果显示
+                await this.typeDebateMessage(debater.icon, debater.name, text);
+            } else {
+                throw new Error(`API错误: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('辩论发言生成失败:', error);
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+            
+            // 回退到预设发言
+            const fallbackText = debater.role;
+            this.debateHistory.push({ speaker: debater.name, text: fallbackText });
+            this.addDebateMessage(debater.icon, `[${debater.name}] ${fallbackText}`, 'debate-speech');
+        }
+    }
+
+    // 生成辩论总结
+    async generateDebateSummary(debateConfig) {
+        const loadingId = this.addDebateMessage('🤖', 'AI正在总结辩论要点...', 'debate-loading');
+
+        const historyText = this.debateHistory.map(h => `${h.speaker}: ${h.text}`).join('\n');
+
+        const systemPrompt = `你是一位AI教育专家。请总结以下辩论的核心观点和关键知识点。
+
+辩论主题：${debateConfig.topic}
+
+总结要求：
+1. 概括各方的主要论点（每方1-2句话）
+2. 指出辩论中的关键分歧点
+3. 提炼出核心知识点（3-5个）
+4. 用通俗易懂的语言
+5. 总结不超过300字
+6. 结尾给出一个引人深思的问题`;
+
+        try {
+            const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer 325d6fa364954d2e871c30ba95b553bd.KBdQdqgJgELJBhnv'
+                },
+                body: JSON.stringify({
+                    model: 'glm-4.5-flash',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `辩论记录：\n${historyText}\n\n请总结这场辩论。` }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 600,
+                    top_p: 0.9
+                })
+            });
+
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+
+            if (response.ok) {
+                const data = await response.json();
+                const text = data.choices?.[0]?.message?.content || '总结生成失败';
+                await this.typeDebateMessage('🤖', 'AI总结', text);
+            }
+        } catch (error) {
+            console.error('辩论总结失败:', error);
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+            this.addDebateMessage('🤖', '辩论总结生成失败，但你可以通过上方对话了解各方观点。', 'debate-summary');
+        }
+    }
+
+    // 玩家参与辩论（回应玩家的提问/观点）
+    async handlePlayerDebateInput(playerMessage) {
+        if (!playerMessage.trim()) return;
+
+        this.addDebateMessage('👤', `[${this.player.name || '玩家'}] ${playerMessage}`, 'debate-player');
+
+        // 选择一个辩手回应
+        const debaters = this.currentDebate.debaters;
+        const responder = debaters[Math.floor(Math.random() * debaters.length)];
+
+        const loadingId = this.addDebateMessage(responder.icon, '正在回应...', 'debate-loading');
+
+        const historyText = this.debateHistory.map(h => `${h.speaker}: ${h.text}`).join('\n');
+
+        const systemPrompt = `你是${responder.name}，正在辩论中。一位玩家（时间旅行者）提出了一个问题或观点，请回应。
+
+辩论主题：${this.currentDebate.topic}
+你的立场：${responder.role}
+
+回应要求：
+1. 保持角色设定
+2. 认真回应玩家的观点
+3. 可以同意、反驳或补充
+4. 80-150字
+5. 语气友好但保持辩论的严肃性`;
+
+        try {
+            const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer 325d6fa364954d2e871c30ba95b553bd.KBdQdqgJgELJBhnv'
+                },
+                body: JSON.stringify({
+                    model: 'glm-4.5-flash',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `辩论历史：\n${historyText}\n\n玩家说：${playerMessage}\n\n请以${responder.name}的身份回应。` }
+                    ],
+                    temperature: 0.8,
+                    max_tokens: 300,
+                    top_p: 0.9
+                })
+            });
+
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+
+            if (response.ok) {
+                const data = await response.json();
+                const text = data.choices?.[0]?.message?.content || '（回应失败）';
+                this.debateHistory.push({ speaker: responder.name, text: text });
+                await this.typeDebateMessage(responder.icon, responder.name, text);
+            }
+        } catch (error) {
+            console.error('辩手回应失败:', error);
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+        }
+    }
+
+    // 显示辩论UI
+    showDebateUI(debateConfig) {
+        const debateScreen = document.getElementById('debate-screen');
+        if (!debateScreen) return;
+        
+        debateScreen.style.display = 'flex';
+        document.getElementById('debate-messages').innerHTML = '';
+        
+        // 设置辩手头像
+        const avatarsEl = document.getElementById('debate-avatars');
+        if (avatarsEl) {
+            avatarsEl.innerHTML = debateConfig.debaters.map(d => 
+                `<div class="debate-avatar" title="${d.name}">${d.icon}</div>`
+            ).join('');
+        }
+    }
+
+    // 隐藏辩论UI
+    hideDebateUI() {
+        const debateScreen = document.getElementById('debate-screen');
+        if (debateScreen) debateScreen.style.display = 'none';
+    }
+
+    // 添加辩论消息
+    addDebateMessage(icon, text, className) {
+        const container = document.getElementById('debate-messages');
+        if (!container) return null;
+        
+        const msgId = 'debate-msg-' + Date.now() + Math.random().toString(36).substr(2, 4);
+        const msgDiv = document.createElement('div');
+        msgDiv.id = msgId;
+        msgDiv.className = `debate-message ${className || ''}`;
+        msgDiv.innerHTML = `<span class="debate-icon">${icon}</span><span class="debate-text">${text}</span>`;
+        container.appendChild(msgDiv);
+        container.scrollTop = container.scrollHeight;
+        return msgId;
+    }
+
+    // 打字机效果显示辩论消息
+    async typeDebateMessage(icon, name, text) {
+        const container = document.getElementById('debate-messages');
+        if (!container) return;
+        
+        const msgId = 'debate-msg-' + Date.now();
+        const msgDiv = document.createElement('div');
+        msgDiv.id = msgId;
+        msgDiv.className = 'debate-message debate-speech';
+        msgDiv.innerHTML = `<span class="debate-icon">${icon}</span><span class="debate-speaker">${name}：</span><span class="debate-text"></span>`;
+        container.appendChild(msgDiv);
+
+        const textEl = msgDiv.querySelector('.debate-text');
+        let index = 0;
+        
+        return new Promise(resolve => {
+            const typeInterval = setInterval(() => {
+                if (index < text.length) {
+                    textEl.textContent += text[index];
+                    index++;
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    clearInterval(typeInterval);
+                    resolve();
+                }
+            }, 25);
+        });
+    }
+
+    // 等待玩家点击继续
+    waitForDebateContinue() {
+        return new Promise(resolve => {
+            this._debateContinueResolve = resolve;
+            const btn = document.getElementById('debate-continue-btn');
+            if (btn) {
+                btn.style.display = 'inline-block';
+                btn.onclick = () => {
+                    btn.style.display = 'none';
+                    resolve();
+                };
+            }
+        });
+    }
+
+    // 等待玩家输入（带超时）
+    waitForPlayerDebateInput(timeoutMs) {
+        return new Promise(resolve => {
+            const input = document.getElementById('debate-input');
+            const sendBtn = document.getElementById('debate-send-btn');
+            const continueBtn = document.getElementById('debate-continue-btn');
+            
+            if (input) {
+                input.style.display = 'block';
+                sendBtn.style.display = 'inline-block';
+                input.focus();
+            }
+            if (continueBtn) {
+                continueBtn.style.display = 'inline-block';
+                continueBtn.textContent = '跳过';
+            }
+
+            let resolved = false;
+            const done = () => {
+                if (resolved) return;
+                resolved = true;
+                if (input) { input.style.display = 'none'; input.value = ''; }
+                if (sendBtn) sendBtn.style.display = 'none';
+                if (continueBtn) { continueBtn.style.display = 'none'; continueBtn.textContent = '继续'; }
+                resolve();
+            };
+
+            // 发送按钮
+            if (sendBtn) {
+                sendBtn.onclick = async () => {
+                    const msg = input.value.trim();
+                    if (msg) {
+                        sendBtn.style.display = 'none';
+                        input.style.display = 'none';
+                        continueBtn.style.display = 'none';
+                        await this.handlePlayerDebateInput(msg);
+                    }
+                    done();
+                };
+            }
+
+            // 回车发送
+            if (input) {
+                input.onkeydown = async (e) => {
+                    if (e.key === 'Enter') {
+                        const msg = input.value.trim();
+                        if (msg) {
+                            sendBtn.style.display = 'none';
+                            input.style.display = 'none';
+                            continueBtn.style.display = 'none';
+                            await this.handlePlayerDebateInput(msg);
+                        }
+                        done();
+                    }
+                };
+            }
+
+            // 跳过/继续按钮
+            if (continueBtn) {
+                continueBtn.onclick = () => done();
+            }
+
+            // 超时
+            setTimeout(() => {
+                if (!resolved) done();
+            }, timeoutMs);
+        });
+    }
+
+    // 辅助：延迟
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
 
